@@ -13,6 +13,11 @@ class TestVideoPlayerNode(rclpy.node.Node):
     def __init__(self):
         super().__init__("test_video_player")
         self.declare_parameter('video_path', 'NA')
+        self.declare_parameter('debug', False)
+
+        self.debug = self.get_parameter(
+            'debug').get_parameter_value().bool_value
+
         self.timer = self.create_timer(0.1, self.callback)
         self.video_path = self.get_parameter(
             'video_path').get_parameter_value().string_value
@@ -25,8 +30,9 @@ class TestVideoPlayerNode(rclpy.node.Node):
         ret_val, frame = self.cap.read()
 
         if ret_val:
-            cv2.imshow("frame", frame)
-            cv2.waitKey(1)
+            if self.debug:
+                cv2.imshow("frame", frame)
+                cv2.waitKey(1)
             rgb_img_msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
             rgb_img_msg.header.frame_id = 'base_link'
             self.img_pub.publish(rgb_img_msg)
