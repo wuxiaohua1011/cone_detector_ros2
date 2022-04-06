@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from distutils.log import debug
 from lib2to3.pytree import convert
 from builtin_interfaces.msg import Duration as BuiltInDuration
 from numpy import imag
@@ -64,7 +65,9 @@ VID_RANGE = np.linspace(0.0, 1.0, VIRIDIS.shape[0])
 
 def convert_image(img0, img_size=640, stride=32, auto=True):
     # Padded resize
-    img = letterbox(img0, img_size, stride=stride, auto=auto)[0]
+    img = letterbox(
+        img0, img_size, stride=stride, auto=True, scaleFill=False, scaleup=True
+    )[0]
 
     # Convert
     img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -208,13 +211,12 @@ class ConeDetectorNode(rclpy.node.Node):
             output = self.cam_to_output(
                 P=self.get_cam_to_output_transform(), points=output
             )
-
         # compute the centroids for the detections in respective frames
         centers = []
         for points in output:
             avgs = np.average(points, axis=1)
             mins = np.min(points, axis=1)
-            centers.append([mins[0], avgs[1], mins[2]])
+            centers.append([avgs[0], avgs[1], 0])
         # publish Detection3DArray and visual msg
         self.publish_detection_3d_array(centers)
         self.publish_detection_3d_array_visual(centers)
@@ -266,6 +268,9 @@ class ConeDetectorNode(rclpy.node.Node):
                         int(t.cpu().detach().numpy()) for t in xyxy
                     ]
                     result_boxes.append([minx, miny, maxx, maxy])
+        if self.debug:
+            cv2.imshow("bbox", im0)
+            cv2.waitKey(1)
         return result_boxes
 
     def camera_info_callback(self, msg):
