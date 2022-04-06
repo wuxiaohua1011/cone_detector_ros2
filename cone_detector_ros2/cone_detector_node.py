@@ -459,8 +459,8 @@ class ConeDetectorNode(rclpy.node.Node):
         markers = Marker()
         markers.header = header
         markers.type = 6
-        # markers.pose = Pose(position=Point(x=float(centers[0][0]), y=float(centers[0][1]), z=float(centers[0][2])))
         markers.scale = Vector3(x=float(1), y=float(1), z=float(3))
+        markers.lifetime = BuiltInDuration(nanosec=int(2e8))
         for center in centers:
             point = Point(x=float(center[0]), y=float(center[1]), z=float(center[2]))
             markers.colors.append(ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0))
