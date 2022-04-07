@@ -122,6 +122,14 @@ class ConeDetectorNode(rclpy.node.Node):
         self.get_logger().info(
             f"Listening to Lidar on topic: {self.get_parameter('lidar_topic').get_parameter_value().string_value}"
         )
+        self.is_carla = (
+            True
+            if "carla"
+            in self.get_parameter("rgb_camera_topic").get_parameter_value().string_value
+            else False
+        )
+        self.get_logger().info(f"Is Carla? {self.is_carla}")
+
         ### Subscriber
 
         profile = QoSProfile(
@@ -218,30 +226,30 @@ class ConeDetectorNode(rclpy.node.Node):
             return
 
         # filter points that are in the bounding box
-        # filtered_points = [
-        #     self.get_points_only_in_bbox(box, points=points_2d) for box in boxes
-        # ]
-        # # change back to camera coordinate
-        # output = self.img_to_cam(intrinsics=self.intrinsics, points=filtered_points)
-        # if len(output) == 0:
-        #     return
-        # # convert from cam -> output frame, if nessecary
-        # if self.to_frame_rel != self.output_frame_id:
-        #     output = self.cam_to_output(
-        #         P=self.get_cam_to_output_transform(), points=output
-        #     )
-        # # compute the centroids for the detections in respective frames
-        # centers = []
-        # for points in output:
-        #     avgs = np.average(points, axis=1)
-        #     mins = np.min(points, axis=1)
-        #     centers.append([avgs[0], avgs[1], 0])
-        # # publish Detection3DArray and visual msg
-        # self.publish_detection_3d_array(centers)
-        # self.publish_detection_3d_array_visual(centers)
+        filtered_points = [
+            self.get_points_only_in_bbox(box, points=points_2d) for box in boxes
+        ]
+        # change back to camera coordinate
+        output = self.img_to_cam(points=filtered_points)
+        if len(output) == 0:
+            return
+        # convert from cam -> output frame, if nessecary
+        if self.to_frame_rel != self.output_frame_id:
+            output = self.cam_to_output(
+                P=self.get_cam_to_output_transform(), points=output
+            )
+        # compute the centroids for the detections in respective frames
+        centers = []
+        for points in output:
+            avgs = np.average(points, axis=1)
+            mins = np.min(points, axis=1)
+            centers.append([avgs[0], avgs[1], 0])
+        # publish Detection3DArray and visual msg
+        self.publish_detection_3d_array(centers)
+        self.publish_detection_3d_array_visual(centers)
 
         if self.debug:
-            # self.draw_filtered_points(original_image, filtered_points=filtered_points)
+            self.draw_filtered_points(original_image, filtered_points=filtered_points)
             cv2.imshow("lidar_projection", lidar_camera_image)
             cv2.waitKey(1)
 
@@ -286,7 +294,8 @@ class ConeDetectorNode(rclpy.node.Node):
                     minx, miny, maxx, maxy = [
                         int(t.cpu().detach().numpy()) for t in xyxy
                     ]
-                    result_boxes.append([minx, miny, maxx, maxy])
+                    padding = int((maxy - miny) * 0.8)
+                    result_boxes.append([minx, miny + padding, maxx, maxy])
         if self.debug:
             cv2.imshow("bbox", im0)
             cv2.waitKey(1)
@@ -354,21 +363,20 @@ class ConeDetectorNode(rclpy.node.Node):
         )
         # and remember that in standard image coordinate, we have x as side ways, y as up and down, z as depth
         # so we need to convert to that format.
-        point_in_camera_coords = np.array(
-            [
-                point_in_camera_coords[1, :],
-                point_in_camera_coords[2, :],
-                point_in_camera_coords[0, :],
-            ]
-        )
+        if self.is_carla is False:
+            point_in_camera_coords = np.array(
+                [
+                    -point_in_camera_coords[1, :],
+                    -point_in_camera_coords[2, :],
+                    point_in_camera_coords[0, :],
+                ]
+            )
         # convert points to image coordinate
         points_2d = np.dot(self.intrinsics, point_in_camera_coords)
-
         # in reality, lidar are going to have readings with 0 (unknown), we need to filter out those readings
         mask = points_2d[2, :] != 0
         points_2d = points_2d.T[mask].T
         intensity = intensity[mask]
-
         # Remember to normalize the x, y values by the 3rd value.
         points_2d = np.array(
             [
@@ -424,8 +432,6 @@ class ConeDetectorNode(rclpy.node.Node):
                 u_coord[i] - s : u_coord[i] + s,
             ] = color_map[i]
         im_array = np.array(im_array)
-        cv2.imshow("im_arra", im_array)
-        cv2.waitKey(1)
         return points_2d, im_array
 
     @staticmethod
@@ -443,8 +449,7 @@ class ConeDetectorNode(rclpy.node.Node):
         output = [P @ np.vstack([p, np.ones(p.shape[1])]) for p in points]
         return output
 
-    @staticmethod
-    def img_to_cam(intrinsics, points):
+    def img_to_cam(self, points):
         """given intrinsics and a list of points, generate the points in camera coordinate
 
         Args:
@@ -456,21 +461,24 @@ class ConeDetectorNode(rclpy.node.Node):
         """
         try:
             output = []
-            for points in points:
-                points = points.T  # 3xn
-                # transform points back to camera coordinate
+            for ps in points:
+                ps = ps.T
                 points_2d = np.array(
                     [
-                        points[0, :] * points[2, :],
-                        points[1, :] * points[2, :],
-                        points[2, :],
+                        ps[0, :] * ps[2, :],
+                        ps[1, :] * ps[2, :],
+                        ps[2, :],
                     ]
                 )  # 3xn
-                cam_points = np.dot(np.linalg.inv(intrinsics), points_2d)  # 3xn
+                cam_points = np.dot(np.linalg.inv(self.intrinsics), points_2d)  # 3xn
+                if self.is_carla is False:
+                    cam_points = np.array(
+                        [cam_points[2], -cam_points[0], -cam_points[1]]
+                    )
                 output.append(cam_points)  # mx3xn, where m is number of detections
             return output
         except np.linalg.LinAlgError:
-            print(f"Intrinsics error!!!: {intrinsics}")
+            print(f"Intrinsics error!!!: {self.intrinsics}")
             return []
         except Exception as e:
             print(f"Error: {e}")
@@ -502,11 +510,14 @@ class ConeDetectorNode(rclpy.node.Node):
         markers = Marker()
         markers.header = header
         markers.type = 6
-        markers.scale = Vector3(x=float(1), y=float(1), z=float(3))
+        if self.is_carla is False:
+            markers.scale = Vector3(x=float(0.5), y=float(0.2), z=float(0.2))
+        else:
+            markers.scale = Vector3(x=float(1), y=float(1), z=float(3))
         markers.lifetime = BuiltInDuration(nanosec=int(2e8))
         for center in centers:
             point = Point(x=float(center[0]), y=float(center[1]), z=float(center[2]))
-            markers.colors.append(ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0))
+            markers.colors.append(ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0))
             markers.points.append(point)
         print(f"Publishing {len(markers.points)} markers")
 

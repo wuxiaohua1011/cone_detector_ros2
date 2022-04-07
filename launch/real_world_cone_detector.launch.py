@@ -18,11 +18,11 @@ def generate_launch_description():
                     )
                 ),
                 launch_arguments={
-                    "rgb_camera_topic": "/zed2i/zed_node/left/image_rect_color",
-                    "rgb_camera_info_topic": "/zed2i/zed_node/left/camera_info",
+                    "rgb_camera_topic": "/zed2i/zed_node/left_raw/image_raw_color",
+                    "rgb_camera_info_topic": "/zed2i/zed_node/left_raw/camera_info",
                     "lidar_frame_id": "lidar_link",
                     "rgb_frame_id": "camera_link",
-                    "output_frame_id": "base_link",
+                    "output_frame_id": "camera_link",
                     "lidar_topic": "/livox/lidar",
                     "debug": "True",
                 }.items(),
