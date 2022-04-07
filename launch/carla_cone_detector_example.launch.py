@@ -18,14 +18,14 @@ def generate_launch_description():
     rviz_path = base_path + "/configs/carla_rviz.rviz"
     return LaunchDescription(
         [
-            launch.actions.IncludeLaunchDescription(
-                launch.launch_description_sources.PythonLaunchDescriptionSource(
-                    os.path.join(
-                        get_package_share_directory("roar_carla_ros2"),
-                        "roar_carla_no_rviz.launch.py",
-                    )
-                )
-            ),
+            # launch.actions.IncludeLaunchDescription(
+            #     launch.launch_description_sources.PythonLaunchDescriptionSource(
+            #         os.path.join(
+            #             get_package_share_directory("roar_carla_ros2"),
+            #             "roar_carla_no_rviz.launch.py",
+            #         )
+            #     )
+            # ),
             launch.actions.IncludeLaunchDescription(
                 launch.launch_description_sources.PythonLaunchDescriptionSource(
                     os.path.join(

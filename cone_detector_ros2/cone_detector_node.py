@@ -36,7 +36,9 @@ import numpy as np
 from vision_msgs.msg import Detection3DArray, Detection3D, BoundingBox3D
 from visualization_msgs.msg import MarkerArray, Marker
 from std_msgs.msg import ColorRGBA
+from image_geometry import PinholeCameraModel
 
+from rclpy.qos import *
 from .models.common import DetectMultiBackend
 from .utils.general import (
     LOGGER,
@@ -92,10 +94,11 @@ class ConeDetectorNode(rclpy.node.Node):
         self.declare_parameter("output_frame_id", "")
 
         self.debug = self.get_parameter("debug").get_parameter_value().bool_value
+        self.get_logger().info(f"Debug mode is set to: [{self.debug}]")
 
         self.bridge = CvBridge()
         self.get_logger().info(
-            f"Listening to image topic: {self.get_parameter('rgb_camera_topic').get_parameter_value().string_value}"
+            f"Listening to RGB Camera topic: {self.get_parameter('rgb_camera_topic').get_parameter_value().string_value}"
         )
 
         self.to_frame_rel = (
@@ -113,27 +116,40 @@ class ConeDetectorNode(rclpy.node.Node):
             )
             # only output in sensor's point of view if no global point of view given
             self.output_frame_id = self.to_frame_rel
-        print(
-            f"Listening to RGB Camera info on topic:",
-            self.get_parameter("rgb_camera_info_topic")
-            .get_parameter_value()
-            .string_value,
+        self.get_logger().info(
+            f"Listening to RGB Camera Info on topic: {self.get_parameter('rgb_camera_info_topic').get_parameter_value().string_value}"
+        )
+        self.get_logger().info(
+            f"Listening to Lidar on topic: {self.get_parameter('lidar_topic').get_parameter_value().string_value}"
         )
         ### Subscriber
+
+        profile = QoSProfile(
+            history=QoSHistoryPolicy.KEEP_LAST,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            depth=5,
+        )
+
         self.front_left_img = message_filters.Subscriber(
             self,
             Image,
             self.get_parameter("rgb_camera_topic").get_parameter_value().string_value,
+            qos_profile=profile,
         )
+
         self.center_lidar = message_filters.Subscriber(
             self,
             PointCloud2,
             self.get_parameter("lidar_topic").get_parameter_value().string_value,
+            qos_profile=profile,
         )
-        queue_size = 30
-        self.ts = message_filters.TimeSynchronizer(
+        queue_size = 100
+        self.ts = message_filters.ApproximateTimeSynchronizer(
             [self.front_left_img, self.center_lidar],
-            queue_size,
+            queue_size=queue_size,
+            slop=5,
+            allow_headerless=True,
         )
         self.ts.registerCallback(self.callback)
 
@@ -175,6 +191,8 @@ class ConeDetectorNode(rclpy.node.Node):
         self.imgsz = (640, 640)
         self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check image size
         self.model.warmup(imgsz=(1 if self.pt else 1, 3, *self.imgsz))
+
+        self.camera_model = PinholeCameraModel()
         self.get_logger().info("Cone detector Initialized")
 
     def callback(self, left_cam_msg, center_lidar_pcl_msg):
@@ -186,6 +204,7 @@ class ConeDetectorNode(rclpy.node.Node):
         original_image = self.bridge.imgmsg_to_cv2(
             left_cam_msg, desired_encoding="bgr8"
         )
+
         boxes = self.process_image(im=original_image)
         if len(boxes) == 0 and self.debug:
             self.get_logger().info("No Traffic Cone detected")
@@ -199,30 +218,30 @@ class ConeDetectorNode(rclpy.node.Node):
             return
 
         # filter points that are in the bounding box
-        filtered_points = [
-            self.get_points_only_in_bbox(box, points=points_2d) for box in boxes
-        ]
-        # change back to camera coordinate
-        output = self.img_to_cam(intrinsics=self.intrinsics, points=filtered_points)
-        if len(output) == 0:
-            return
-        # convert from cam -> output frame, if nessecary
-        if self.to_frame_rel != self.output_frame_id:
-            output = self.cam_to_output(
-                P=self.get_cam_to_output_transform(), points=output
-            )
-        # compute the centroids for the detections in respective frames
-        centers = []
-        for points in output:
-            avgs = np.average(points, axis=1)
-            mins = np.min(points, axis=1)
-            centers.append([avgs[0], avgs[1], 0])
-        # publish Detection3DArray and visual msg
-        self.publish_detection_3d_array(centers)
-        self.publish_detection_3d_array_visual(centers)
+        # filtered_points = [
+        #     self.get_points_only_in_bbox(box, points=points_2d) for box in boxes
+        # ]
+        # # change back to camera coordinate
+        # output = self.img_to_cam(intrinsics=self.intrinsics, points=filtered_points)
+        # if len(output) == 0:
+        #     return
+        # # convert from cam -> output frame, if nessecary
+        # if self.to_frame_rel != self.output_frame_id:
+        #     output = self.cam_to_output(
+        #         P=self.get_cam_to_output_transform(), points=output
+        #     )
+        # # compute the centroids for the detections in respective frames
+        # centers = []
+        # for points in output:
+        #     avgs = np.average(points, axis=1)
+        #     mins = np.min(points, axis=1)
+        #     centers.append([avgs[0], avgs[1], 0])
+        # # publish Detection3DArray and visual msg
+        # self.publish_detection_3d_array(centers)
+        # self.publish_detection_3d_array_visual(centers)
 
         if self.debug:
-            self.draw_filtered_points(original_image, filtered_points=filtered_points)
+            # self.draw_filtered_points(original_image, filtered_points=filtered_points)
             cv2.imshow("lidar_projection", lidar_camera_image)
             cv2.waitKey(1)
 
@@ -278,6 +297,7 @@ class ConeDetectorNode(rclpy.node.Node):
         self.image_w = msg.width
         self.image_h = msg.height
         self.has_received_intrinsics = True
+        self.camera_model.fromCameraInfo(msg)
         self.get_logger().debug("Camera Intrinsices updated")
 
     def get_lidar2cam(self):
@@ -332,7 +352,23 @@ class ConeDetectorNode(rclpy.node.Node):
         point_in_camera_coords = np.array(
             [sensor_points[0], sensor_points[1], sensor_points[2]]
         )
+        # and remember that in standard image coordinate, we have x as side ways, y as up and down, z as depth
+        # so we need to convert to that format.
+        point_in_camera_coords = np.array(
+            [
+                point_in_camera_coords[1, :],
+                point_in_camera_coords[2, :],
+                point_in_camera_coords[0, :],
+            ]
+        )
+        # convert points to image coordinate
         points_2d = np.dot(self.intrinsics, point_in_camera_coords)
+
+        # in reality, lidar are going to have readings with 0 (unknown), we need to filter out those readings
+        mask = points_2d[2, :] != 0
+        points_2d = points_2d.T[mask].T
+        intensity = intensity[mask]
+
         # Remember to normalize the x, y values by the 3rd value.
         points_2d = np.array(
             [
@@ -388,6 +424,8 @@ class ConeDetectorNode(rclpy.node.Node):
                 u_coord[i] - s : u_coord[i] + s,
             ] = color_map[i]
         im_array = np.array(im_array)
+        cv2.imshow("im_arra", im_array)
+        cv2.waitKey(1)
         return points_2d, im_array
 
     @staticmethod
