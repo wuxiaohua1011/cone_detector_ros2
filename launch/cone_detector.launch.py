@@ -31,6 +31,10 @@ def generate_launch_description():
                 default_value="/carla/ego_vehicle/front_left_rgb/camera_info",
             ),
             launch.actions.DeclareLaunchArgument(
+                name="lidar_topic",
+                default_value="/carla/ego_vehicle/center_lidar",
+            ),
+            launch.actions.DeclareLaunchArgument(
                 name="lidar_frame_id", default_value="ego_vehicle/center_lidar"
             ),
             launch.actions.DeclareLaunchArgument(
@@ -54,6 +58,11 @@ def generate_launch_description():
                     {
                         "rgb_camera_topic": launch.substitutions.LaunchConfiguration(
                             "rgb_camera_topic"
+                        )
+                    },
+                    {
+                        "lidar_topic": launch.substitutions.LaunchConfiguration(
+                            "lidar_topic"
                         )
                     },
                     {"debug": launch.substitutions.LaunchConfiguration("debug")},
