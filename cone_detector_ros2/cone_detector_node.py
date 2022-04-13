@@ -76,7 +76,32 @@ def convert_image(img0, img_size=640, stride=32, auto=True):
     img = np.ascontiguousarray(img)
     return img
 
+def get_points_only_in_bbox(boxes, points):
+    filtered_points = [
+        get_points_only_in_bbox_helper(box, points=points) for box in boxes
+    ]
+    filtered_points = [
+        p for p in filtered_points if np.shape(p)[0] > 0 
+    ] # get points that have values, not empty slices
+    return filtered_points
 
+
+def get_points_only_in_bbox_helper(bbox, points):
+    """
+    @param
+        bbox = ymin, xmin, ymax, xmax
+        points: Nx3 array of points [u,v,s]
+    """
+    xmin, ymin, xmax, ymax = bbox
+
+    mask = np.where(
+        (points[:, 0] >= xmin)
+        & (points[:, 0] <= xmax)
+        & (points[:, 1] >= ymin)
+        & (points[:, 1] <= ymax)
+    )
+    result = points[mask]
+    return result
 class ConeDetectorNode(rclpy.node.Node):
     def __init__(self):
         super().__init__("cone_detector_node")
@@ -189,7 +214,7 @@ class ConeDetectorNode(rclpy.node.Node):
         self.image_h = 386
 
         self.device = select_device(device="")
-        self.weights_path = "/home/roar/Desktop/projects/roar-indy-ws/src/cone_detector_ros2/configs/best.pt"
+        self.weights_path = self.get_parameter("model_path").get_parameter_value().string_value
         self.model = DetectMultiBackend(weights=self.weights_path, device=self.device)
         self.stride, self.names, self.pt = (
             self.model.stride,
@@ -226,9 +251,8 @@ class ConeDetectorNode(rclpy.node.Node):
             return
 
         # filter points that are in the bounding box
-        filtered_points = [
-            self.get_points_only_in_bbox(box, points=points_2d) for box in boxes
-        ]
+        filtered_points = get_points_only_in_bbox(boxes=boxes, points=points_2d)
+        
         # change back to camera coordinate
         output = self.img_to_cam(points=filtered_points)
         if len(output) == 0:
@@ -242,7 +266,7 @@ class ConeDetectorNode(rclpy.node.Node):
         centers = []
         for points in output:
             avgs = np.average(points, axis=1)
-            mins = np.min(points, axis=1)
+            mins = np.min(points, axis=1, initial=0)
             centers.append([avgs[0], avgs[1], 0])
         # publish Detection3DArray and visual msg
         self.publish_detection_3d_array(centers)
@@ -563,23 +587,6 @@ class ConeDetectorNode(rclpy.node.Node):
                 ] = [0, 0, 0]
         cv2.imshow("filtered points", img_copy)
 
-    @staticmethod
-    def get_points_only_in_bbox(bbox, points):
-        """
-        @param
-            bbox = ymin, xmin, ymax, xmax
-            points: Nx3 array of points [u,v,s]
-        """
-        xmin, ymin, xmax, ymax = bbox
-
-        mask = np.where(
-            (points[:, 0] >= xmin)
-            & (points[:, 0] <= xmax)
-            & (points[:, 1] >= ymin)
-            & (points[:, 1] <= ymax)
-        )
-        result = points[mask]
-        return result
 
 
 def pose_to_pq(msg):
