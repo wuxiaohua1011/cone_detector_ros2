@@ -13,7 +13,7 @@ import launch
 
 def generate_launch_description():
     base_path = os.path.realpath(get_package_share_directory("cone_detector_ros2"))
-    model_path = (Path(base_path) / "configs" / "frozen_inference_graph.pb").as_posix()
+    model_path = (Path(base_path) / "configs" / "best.pt").as_posix()
 
     return LaunchDescription(
         [
