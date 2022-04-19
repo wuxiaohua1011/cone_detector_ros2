@@ -33,8 +33,12 @@ def get_points_only_in_bbox(boxes, points, im):
     filtered_points = [
         p for p in filtered_points if np.shape(p) != () and np.shape(p)[0] > 0
     ]  # get points that have values, not empty slices
-
-    return filtered_points
+    result = []
+    for points in filtered_points:
+        max_y = np.max(points[:, 1])
+        ps = points[points[:, 1] > max_y - 5]
+        result.append(ps)
+    return result
 
 
 def get_points_only_in_bbox_helper(bbox, points, im):
