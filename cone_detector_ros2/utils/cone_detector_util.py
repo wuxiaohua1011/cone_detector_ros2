@@ -1,4 +1,4 @@
-import numpy as np 
+import numpy as np
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import PoseStamped
@@ -8,7 +8,8 @@ from geometry_msgs.msg import Vector3
 import tf_transformations as tr
 from matplotlib import cm
 from .augmentations import letterbox
-import cv2 
+import cv2
+
 VIRIDIS = np.array(cm.get_cmap("viridis").colors)
 VID_RANGE = np.linspace(0.0, 1.0, VIRIDIS.shape[0])
 
@@ -24,23 +25,26 @@ def convert_image(img0, img_size=640, stride=32, auto=True):
     img = np.ascontiguousarray(img)
     return img
 
-def get_points_only_in_bbox(boxes, points):
+
+def get_points_only_in_bbox(boxes, points, im):
     filtered_points = [
-        get_points_only_in_bbox_helper(box, points=points) for box in boxes
+        get_points_only_in_bbox_helper(box, points=points, im=im) for box in boxes
     ]
     filtered_points = [
-        p for p in filtered_points if np.shape(p)[0] > 0 
-    ] # get points that have values, not empty slices
+        p for p in filtered_points if np.shape(p) != () and np.shape(p)[0] > 0
+    ]  # get points that have values, not empty slices
     return filtered_points
 
 
-def get_points_only_in_bbox_helper(bbox, points):
+def get_points_only_in_bbox_helper(bbox, points, im):
     """
     @param
         bbox = ymin, xmin, ymax, xmax
         points: Nx3 array of points [u,v,s]
     """
     xmin, ymin, xmax, ymax = bbox
+    img = np.copy(im)[:, :, :3]
+    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
     mask = np.where(
         (points[:, 0] >= xmin)
@@ -48,8 +52,29 @@ def get_points_only_in_bbox_helper(bbox, points):
         & (points[:, 1] >= ymin)
         & (points[:, 1] <= ymax)
     )
-    result = points[mask]
+    points_in_box = points[mask]
+
+    # define range of orange color in HSV
+    lower_orange = np.array([0, 49, 166])
+    upper_orange = np.array([33, 255, 255])
+
+    # uvs is any point in points_in_box
+    # uvs[1] is the v-coord and uvs[0] is the u-coord
+    # so for any uvs point, I check if its hsv-value is within range
+    result = np.array(
+        list(
+            filter(
+                lambda uvs: (lower_orange <= hsv_img[int(uvs[1]), int(uvs[0])]).all()
+                & (  # all hsv values of point above lower_orange
+                    hsv_img[int(uvs[1]), int(uvs[0])] <= upper_orange
+                ).all(),  # all hsv values of point below upper_orange
+                points_in_box,
+            )
+        )
+    )
     return result
+
+
 def pose_to_pq(msg):
     """Convert a C{geometry_msgs/Pose} into position/quaternion np arrays
 
@@ -130,6 +155,8 @@ def msg_to_se3(msg):
     g = tr.quaternion_matrix(q)
     g[0:3, -1] = p
     return g
+
+
 def draw_filtered_points(img, filtered_points):
     img_copy = np.copy(img)
     for points in filtered_points:
@@ -146,6 +173,8 @@ def draw_filtered_points(img, filtered_points):
                 u_coord[i] - s : u_coord[i] + s,
             ] = [0, 0, 0]
     cv2.imshow("filtered points", img_copy)
+
+
 def cam_to_output(P, points):
     """_summary_
 
@@ -159,6 +188,8 @@ def cam_to_output(P, points):
     # change coordinate to output_frame
     output = [P @ np.vstack([p, np.ones(p.shape[1])]) for p in points]
     return output
+
+
 ## The code below is "ported" from
 # https://github.com/ros/common_msgs/tree/noetic-devel/sensor_msgs/src/sensor_msgs
 # I'll make an official port and PR to this repo later:

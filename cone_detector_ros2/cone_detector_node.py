@@ -213,8 +213,9 @@ class ConeDetectorNode(rclpy.node.Node):
             return
 
         # filter points that are in the bounding box
-        filtered_points = get_points_only_in_bbox(boxes=boxes, points=points_2d)
-
+        filtered_points = get_points_only_in_bbox(
+            boxes=boxes, points=points_2d, im=original_image
+        )
         # change back to camera coordinate
         output = self.img_to_cam(points=filtered_points)
         if len(output) == 0:
@@ -278,8 +279,10 @@ class ConeDetectorNode(rclpy.node.Node):
                     minx, miny, maxx, maxy = [
                         int(t.cpu().detach().numpy()) for t in xyxy
                     ]
-                    padding = int((maxy - miny) * 0.8)
-                    result_boxes.append([minx, miny + padding, maxx, maxy])
+                    # padding = int((maxy - miny) * 0.8)
+                    result_boxes.append(
+                        [minx, miny, maxx, maxy]
+                    )  # result_boxes.append([minx, miny + padding, maxx, maxy])
         if self.debug:
             cv2.imshow("bbox", im0)
             cv2.waitKey(1)
