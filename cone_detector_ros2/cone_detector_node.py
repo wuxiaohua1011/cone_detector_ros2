@@ -59,7 +59,7 @@ import torch
 import torch.backends.cudnn as cudnn
 from .utils.plots import Annotator, colors, save_one_box
 from .utils.augmentations import letterbox
-from .utils.cone_detector_util import * 
+from .utils.cone_detector_util import *
 
 
 class ConeDetectorNode(rclpy.node.Node):
@@ -174,7 +174,9 @@ class ConeDetectorNode(rclpy.node.Node):
         self.image_h = 386
 
         self.device = select_device(device="")
-        self.weights_path = self.get_parameter("model_path").get_parameter_value().string_value
+        self.weights_path = (
+            self.get_parameter("model_path").get_parameter_value().string_value
+        )
         self.model = DetectMultiBackend(weights=self.weights_path, device=self.device)
         self.stride, self.names, self.pt = (
             self.model.stride,
@@ -212,16 +214,14 @@ class ConeDetectorNode(rclpy.node.Node):
 
         # filter points that are in the bounding box
         filtered_points = get_points_only_in_bbox(boxes=boxes, points=points_2d)
-        
+
         # change back to camera coordinate
         output = self.img_to_cam(points=filtered_points)
         if len(output) == 0:
             return
         # convert from cam -> output frame, if nessecary
         if self.to_frame_rel != self.output_frame_id:
-            output = cam_to_output(
-                P=self.get_cam_to_output_transform(), points=output
-            )
+            output = cam_to_output(P=self.get_cam_to_output_transform(), points=output)
         # compute the centroids for the detections in respective frames
         centers = []
         for points in output:
@@ -229,7 +229,7 @@ class ConeDetectorNode(rclpy.node.Node):
             mins = np.min(points, axis=1, initial=0)
             centers.append([avgs[0], avgs[1], 0])
         # publish Detection3DArray and visual msg
-        self.publish_detection_3d_array(centers)
+        # self.publish_detection_3d_array(centers)
         self.publish_detection_3d_array_visual(centers)
 
         if self.debug:
@@ -418,7 +418,6 @@ class ConeDetectorNode(rclpy.node.Node):
         im_array = np.array(im_array)
         return points_2d, im_array
 
-
     def img_to_cam(self, points):
         """given intrinsics and a list of points, generate the points in camera coordinate
 
@@ -512,6 +511,7 @@ class ConeDetectorNode(rclpy.node.Node):
             detection3d = Detection3D(header=header, bbox=bbox)
             detection3darray.detections.append(detection3d)
         self.detection_3d_array_publisher.publish(detection3darray)
+
 
 def main(args=None):
     rclpy.init()
