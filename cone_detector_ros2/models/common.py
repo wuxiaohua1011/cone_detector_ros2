@@ -1,4 +1,21 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+"""
+ Copyright (c) 2022 Ultralytics
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ """
+
+
 """
 Common modules
 """
@@ -78,7 +95,9 @@ class Conv(nn.Module):
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p), groups=g, bias=False)
         self.bn = nn.BatchNorm2d(c2)
         self.act = (
-            nn.SiLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
+            nn.SiLU()
+            if act is True
+            else (act if isinstance(act, nn.Module) else nn.Identity())
         )
 
     def forward(self, x):
@@ -121,7 +140,9 @@ class TransformerBlock(nn.Module):
         if c1 != c2:
             self.conv = Conv(c1, c2)
         self.linear = nn.Linear(c2, c2)  # learnable position embedding
-        self.tr = nn.Sequential(*(TransformerLayer(c2, num_heads) for _ in range(num_layers)))
+        self.tr = nn.Sequential(
+            *(TransformerLayer(c2, num_heads) for _ in range(num_layers))
+        )
         self.c2 = c2
 
     def forward(self, x):
@@ -160,7 +181,9 @@ class BottleneckCSP(nn.Module):
         self.cv4 = Conv(2 * c_, c2, 1, 1)
         self.bn = nn.BatchNorm2d(2 * c_)  # applied to cat(cv2, cv3)
         self.act = nn.SiLU()
-        self.m = nn.Sequential(*(Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)))
+        self.m = nn.Sequential(
+            *(Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n))
+        )
 
     def forward(self, x):
         y1 = self.cv3(self.m(self.cv1(x)))
@@ -178,7 +201,9 @@ class C3(nn.Module):
         self.cv1 = Conv(c1, c_, 1, 1)
         self.cv2 = Conv(c1, c_, 1, 1)
         self.cv3 = Conv(2 * c_, c2, 1)  # optional act=FReLU(c2)
-        self.m = nn.Sequential(*(Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)))
+        self.m = nn.Sequential(
+            *(Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n))
+        )
         # self.m = nn.Sequential(*(CrossConv(c_, c_, 3, 1, g, 1.0, shortcut) for _ in range(n)))
 
     def forward(self, x):
@@ -216,7 +241,9 @@ class SPP(nn.Module):
         c_ = c1 // 2  # hidden channels
         self.cv1 = Conv(c1, c_, 1, 1)
         self.cv2 = Conv(c_ * (len(k) + 1), c2, 1, 1)
-        self.m = nn.ModuleList([nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2) for x in k])
+        self.m = nn.ModuleList(
+            [nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2) for x in k]
+        )
 
     def forward(self, x):
         x = self.cv1(x)
@@ -269,7 +296,9 @@ class Focus(nn.Module):
 
 class GhostConv(nn.Module):
     # Ghost Convolution https://github.com/huawei-noah/ghostnet
-    def __init__(self, c1, c2, k=1, s=1, g=1, act=True):  # ch_in, ch_out, kernel, stride, groups
+    def __init__(
+        self, c1, c2, k=1, s=1, g=1, act=True
+    ):  # ch_in, ch_out, kernel, stride, groups
         super().__init__()
         c_ = c2 // 2  # hidden channels
         self.cv1 = Conv(c1, c_, k, s, None, g, act)
@@ -291,7 +320,9 @@ class GhostBottleneck(nn.Module):
             GhostConv(c_, c2, 1, 1, act=False),
         )  # pw-linear
         self.shortcut = (
-            nn.Sequential(DWConv(c1, c1, k, s, act=False), Conv(c1, c2, 1, 1, act=False))
+            nn.Sequential(
+                DWConv(c1, c1, k, s, act=False), Conv(c1, c2, 1, 1, act=False)
+            )
             if s == 2
             else nn.Identity()
         )
@@ -395,7 +426,9 @@ class DetectMultiBackend(nn.Module):
                 names = yaml.safe_load(f)["names"]  # class names
 
         if pt:  # PyTorch
-            model = attempt_load(weights if isinstance(weights, list) else w, map_location=device)
+            model = attempt_load(
+                weights if isinstance(weights, list) else w, map_location=device
+            )
             stride = max(int(model.stride.max()), 32)  # model stride
             names = (
                 model.module.names if hasattr(model, "module") else model.names
@@ -435,16 +468,22 @@ class DetectMultiBackend(nn.Module):
 
             core = ie.IECore()
             if not Path(w).is_file():  # if not *.xml
-                w = next(Path(w).glob("*.xml"))  # get *.xml file from *_openvino_model dir
+                w = next(
+                    Path(w).glob("*.xml")
+                )  # get *.xml file from *_openvino_model dir
             network = core.read_network(
                 model=w, weights=Path(w).with_suffix(".bin")
             )  # *.xml, *.bin paths
-            executable_network = core.load_network(network, device_name="CPU", num_requests=1)
+            executable_network = core.load_network(
+                network, device_name="CPU", num_requests=1
+            )
         elif engine:  # TensorRT
             LOGGER.info(f"Loading {w} for TensorRT inference...")
             import tensorrt as trt  # https://developer.nvidia.com/nvidia-tensorrt-download
 
-            check_version(trt.__version__, "7.0.0", hard=True)  # require tensorrt>=7.0.0
+            check_version(
+                trt.__version__, "7.0.0", hard=True
+            )  # require tensorrt>=7.0.0
             Binding = namedtuple("Binding", ("name", "dtype", "shape", "data", "ptr"))
             logger = trt.Logger(trt.Logger.INFO)
             with open(w, "rb") as f, trt.Runtime(logger) as runtime:
@@ -455,7 +494,9 @@ class DetectMultiBackend(nn.Module):
                 name = model.get_binding_name(index)
                 dtype = trt.nptype(model.get_binding_dtype(index))
                 shape = tuple(model.get_binding_shape(index))
-                data = torch.from_numpy(np.empty(shape, dtype=np.dtype(dtype))).to(device)
+                data = torch.from_numpy(np.empty(shape, dtype=np.dtype(dtype))).to(
+                    device
+                )
                 bindings[name] = Binding(name, dtype, shape, data, int(data.data_ptr()))
                 if model.binding_is_input(index) and dtype == np.float16:
                     fp16 = True
@@ -473,8 +514,12 @@ class DetectMultiBackend(nn.Module):
                 import tensorflow as tf
 
                 keras = False  # assume TF1 saved_model
-                model = tf.keras.models.load_model(w) if keras else tf.saved_model.load(w)
-            elif pb:  # GraphDef https://www.tensorflow.org/guide/migrate#a_graphpb_or_graphpbtxt
+                model = (
+                    tf.keras.models.load_model(w) if keras else tf.saved_model.load(w)
+                )
+            elif (
+                pb
+            ):  # GraphDef https://www.tensorflow.org/guide/migrate#a_graphpb_or_graphpbtxt
                 LOGGER.info(f"Loading {w} for TensorFlow GraphDef inference...")
                 import tensorflow as tf
 
@@ -505,7 +550,9 @@ class DetectMultiBackend(nn.Module):
                         tf.lite.experimental.load_delegate,
                     )
                 if edgetpu:  # Edge TPU https://coral.ai/software/#edgetpu-runtime
-                    LOGGER.info(f"Loading {w} for TensorFlow Lite Edge TPU inference...")
+                    LOGGER.info(
+                        f"Loading {w} for TensorFlow Lite Edge TPU inference..."
+                    )
                     delegate = {
                         "Linux": "libedgetpu.so.1",
                         "Darwin": "libedgetpu.1.dylib",
@@ -551,7 +598,9 @@ class DetectMultiBackend(nn.Module):
                 blob_name="images", blob=self.ie.Blob(desc, im)
             )  # name=next(iter(request.input_blobs))
             request.infer()
-            y = request.output_blobs["output"].buffer  # name=next(iter(request.output_blobs))
+            y = request.output_blobs[
+                "output"
+            ].buffer  # name=next(iter(request.output_blobs))
         elif self.engine:  # TensorRT
             assert im.shape == self.bindings["images"].shape, (
                 im.shape,
@@ -569,17 +618,23 @@ class DetectMultiBackend(nn.Module):
             y = self.model.predict({"image": im})  # coordinates are xywh normalized
             if "confidence" in y:
                 box = xywh2xyxy(y["coordinates"] * [[w, h, w, h]])  # xyxy pixels
-                conf, cls = y["confidence"].max(1), y["confidence"].argmax(1).astype(np.float)
+                conf, cls = y["confidence"].max(1), y["confidence"].argmax(1).astype(
+                    np.float
+                )
                 y = np.concatenate((box, conf.reshape(-1, 1), cls.reshape(-1, 1)), 1)
             else:
-                k = "var_" + str(sorted(int(k.replace("var_", "")) for k in y)[-1])  # output key
+                k = "var_" + str(
+                    sorted(int(k.replace("var_", "")) for k in y)[-1]
+                )  # output key
                 y = y[k]  # output
         else:  # TensorFlow (SavedModel, GraphDef, Lite, Edge TPU)
             im = (
                 im.permute(0, 2, 3, 1).cpu().numpy()
             )  # torch BCHW to numpy BHWC shape(1,320,192,3)
             if self.saved_model:  # SavedModel
-                y = (self.model(im, training=False) if self.keras else self.model(im)).numpy()
+                y = (
+                    self.model(im, training=False) if self.keras else self.model(im)
+                ).numpy()
             elif self.pb:  # GraphDef
                 y = self.frozen_func(x=self.tf.constant(im)).numpy()
             else:  # Lite or Edge TPU
@@ -657,9 +712,7 @@ class AutoShape(nn.Module):
     iou = 0.45  # NMS IoU threshold
     agnostic = False  # NMS class-agnostic
     multi_label = False  # NMS multiple labels per box
-    classes = (
-        None  # (optional list) filter by class, i.e. = [0, 15, 16] for COCO persons, cats and dogs
-    )
+    classes = None  # (optional list) filter by class, i.e. = [0, 15, 16] for COCO persons, cats and dogs
     max_det = 1000  # maximum number of detections per image
     amp = False  # Automatic Mixed Precision (AMP) inference
 
@@ -672,7 +725,9 @@ class AutoShape(nn.Module):
             include=("yaml", "nc", "hyp", "names", "stride", "abc"),
             exclude=(),
         )  # copy attributes
-        self.dmb = isinstance(model, DetectMultiBackend)  # DetectMultiBackend() instance
+        self.dmb = isinstance(
+            model, DetectMultiBackend
+        )  # DetectMultiBackend() instance
         self.pt = not self.dmb or model.pt  # PyTorch model
         self.model = model.eval()
 
@@ -680,7 +735,9 @@ class AutoShape(nn.Module):
         # Apply to(), cpu(), cuda(), half() to model tensors that are not parameters or registered buffers
         self = super()._apply(fn)
         if self.pt:
-            m = self.model.model.model[-1] if self.dmb else self.model.model[-1]  # Detect()
+            m = (
+                self.model.model.model[-1] if self.dmb else self.model.model[-1]
+            )  # Detect()
             m.stride = fn(m.stride)
             m.grid = list(map(fn, m.grid))
             if isinstance(m.anchor_grid, list):
@@ -699,13 +756,17 @@ class AutoShape(nn.Module):
         #   multiple:        = [Image.open('image1.jpg'), Image.open('image2.jpg'), ...]  # list of images
 
         t = [time_sync()]
-        p = next(self.model.parameters()) if self.pt else torch.zeros(1)  # for device and type
+        p = (
+            next(self.model.parameters()) if self.pt else torch.zeros(1)
+        )  # for device and type
         autocast = self.amp and (
             p.device.type != "cpu"
         )  # Automatic Mixed Precision (AMP) inference
         if isinstance(imgs, torch.Tensor):  # torch
             with amp.autocast(autocast):
-                return self.model(imgs.to(p.device).type_as(p), augment, profile)  # inference
+                return self.model(
+                    imgs.to(p.device).type_as(p), augment, profile
+                )  # inference
 
         # Pre-process
         n, imgs = (
@@ -717,7 +778,9 @@ class AutoShape(nn.Module):
             if isinstance(im, (str, Path)):  # filename or uri
                 im, f = (
                     Image.open(
-                        requests.get(im, stream=True).raw if str(im).startswith("http") else im
+                        requests.get(im, stream=True).raw
+                        if str(im).startswith("http")
+                        else im
                     ),
                     im,
                 )
@@ -727,17 +790,22 @@ class AutoShape(nn.Module):
             files.append(Path(f).with_suffix(".jpg").name)
             if im.shape[0] < 5:  # image in CHW
                 im = im.transpose((1, 2, 0))  # reverse dataloader .transpose(2, 0, 1)
-            im = im[..., :3] if im.ndim == 3 else np.tile(im[..., None], 3)  # enforce 3ch input
+            im = (
+                im[..., :3] if im.ndim == 3 else np.tile(im[..., None], 3)
+            )  # enforce 3ch input
             s = im.shape[:2]  # HWC
             shape0.append(s)  # image shape
             g = size / max(s)  # gain
             shape1.append([y * g for y in s])
             imgs[i] = im if im.data.contiguous else np.ascontiguousarray(im)  # update
         shape1 = [
-            make_divisible(x, self.stride) if self.pt else size for x in np.array(shape1).max(0)
+            make_divisible(x, self.stride) if self.pt else size
+            for x in np.array(shape1).max(0)
         ]  # inf shape
         x = [letterbox(im, shape1, auto=False)[0] for im in imgs]  # pad
-        x = np.ascontiguousarray(np.array(x).transpose((0, 3, 1, 2)))  # stack and BHWC to BCHW
+        x = np.ascontiguousarray(
+            np.array(x).transpose((0, 3, 1, 2))
+        )  # stack and BHWC to BCHW
         x = torch.from_numpy(x).to(p.device).type_as(p) / 255  # uint8 to fp16/32
         t.append(time_sync())
 
@@ -769,7 +837,8 @@ class Detections:
         super().__init__()
         d = pred[0].device  # device
         gn = [
-            torch.tensor([*(im.shape[i] for i in [1, 0, 1, 0]), 1, 1], device=d) for im in imgs
+            torch.tensor([*(im.shape[i] for i in [1, 0, 1, 0]), 1, 1], device=d)
+            for im in imgs
         ]  # normalizations
         self.imgs = imgs  # list of images as numpy arrays
         self.pred = pred  # list of tensors pred[0] = (xyxy, conf, cls)
@@ -809,7 +878,10 @@ class Detections:
                         label = f"{self.names[int(cls)]} {conf:.2f}"
                         if crop:
                             file = (
-                                save_dir / "crops" / self.names[int(cls)] / self.files[i]
+                                save_dir
+                                / "crops"
+                                / self.names[int(cls)]
+                                / self.files[i]
                                 if save
                                 else None
                             )
@@ -823,13 +895,17 @@ class Detections:
                                 }
                             )
                         else:  # all others
-                            annotator.box_label(box, label if labels else "", color=colors(cls))
+                            annotator.box_label(
+                                box, label if labels else "", color=colors(cls)
+                            )
                     im = annotator.im
             else:
                 s += "(no detections)"
 
             im = (
-                Image.fromarray(im.astype(np.uint8)) if isinstance(im, np.ndarray) else im
+                Image.fromarray(im.astype(np.uint8))
+                if isinstance(im, np.ndarray)
+                else im
             )  # from np
             if pprint:
                 LOGGER.info(s.rstrip(", "))
@@ -940,5 +1016,7 @@ class Classify(nn.Module):
         self.flat = nn.Flatten()
 
     def forward(self, x):
-        z = torch.cat([self.aap(y) for y in (x if isinstance(x, list) else [x])], 1)  # cat if list
+        z = torch.cat(
+            [self.aap(y) for y in (x if isinstance(x, list) else [x])], 1
+        )  # cat if list
         return self.flat(self.conv(z))  # flatten to x(b,c2)

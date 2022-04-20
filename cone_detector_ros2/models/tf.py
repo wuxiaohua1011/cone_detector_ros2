@@ -1,4 +1,19 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+"""
+ Copyright (c) 2022 Ultralytics
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ """
 """
 TensorFlow, Keras and TFLite versions of YOLOv5
 Authored by https://github.com/zldrobit in PR https://github.com/ultralytics/yolov5/pull/1127
@@ -53,7 +68,9 @@ class TFBN(keras.layers.Layer):
             beta_initializer=keras.initializers.Constant(w.bias.numpy()),
             gamma_initializer=keras.initializers.Constant(w.weight.numpy()),
             moving_mean_initializer=keras.initializers.Constant(w.running_mean.numpy()),
-            moving_variance_initializer=keras.initializers.Constant(w.running_var.numpy()),
+            moving_variance_initializer=keras.initializers.Constant(
+                w.running_var.numpy()
+            ),
             epsilon=w.eps,
         )
 
@@ -98,9 +115,13 @@ class TFConv(keras.layers.Layer):
 
         # YOLOv5 activations
         if isinstance(w.act, nn.LeakyReLU):
-            self.act = (lambda x: keras.activations.relu(x, alpha=0.1)) if act else tf.identity
+            self.act = (
+                (lambda x: keras.activations.relu(x, alpha=0.1)) if act else tf.identity
+            )
         elif isinstance(w.act, nn.Hardswish):
-            self.act = (lambda x: x * tf.nn.relu6(x + 3) * 0.166666667) if act else tf.identity
+            self.act = (
+                (lambda x: x * tf.nn.relu6(x + 3) * 0.166666667) if act else tf.identity
+            )
         elif isinstance(w.act, (nn.SiLU, SiLU)):
             self.act = (lambda x: keras.activations.swish(x)) if act else tf.identity
         else:
@@ -144,7 +165,11 @@ class TFBottleneck(keras.layers.Layer):
         self.add = shortcut and c1 == c2
 
     def call(self, inputs):
-        return inputs + self.cv2(self.cv1(inputs)) if self.add else self.cv2(self.cv1(inputs))
+        return (
+            inputs + self.cv2(self.cv1(inputs))
+            if self.add
+            else self.cv2(self.cv1(inputs))
+        )
 
 
 class TFConv2d(keras.layers.Layer):
@@ -158,8 +183,12 @@ class TFConv2d(keras.layers.Layer):
             s,
             "VALID",
             use_bias=bias,
-            kernel_initializer=keras.initializers.Constant(w.weight.permute(2, 3, 1, 0).numpy()),
-            bias_initializer=keras.initializers.Constant(w.bias.numpy()) if bias else None,
+            kernel_initializer=keras.initializers.Constant(
+                w.weight.permute(2, 3, 1, 0).numpy()
+            ),
+            bias_initializer=keras.initializers.Constant(w.bias.numpy())
+            if bias
+            else None,
         )
 
     def call(self, inputs):
@@ -212,7 +241,9 @@ class TFSPP(keras.layers.Layer):
         c_ = c1 // 2  # hidden channels
         self.cv1 = TFConv(c1, c_, 1, 1, w=w.cv1)
         self.cv2 = TFConv(c_ * (len(k) + 1), c2, 1, 1, w=w.cv2)
-        self.m = [keras.layers.MaxPool2D(pool_size=x, strides=1, padding="SAME") for x in k]
+        self.m = [
+            keras.layers.MaxPool2D(pool_size=x, strides=1, padding="SAME") for x in k
+        ]
 
     def call(self, inputs):
         x = self.cv1(inputs)
@@ -237,7 +268,9 @@ class TFSPPF(keras.layers.Layer):
 
 class TFDetect(keras.layers.Layer):
     # TF YOLOv5 Detect layer
-    def __init__(self, nc=80, anchors=(), ch=(), imgsz=(640, 640), w=None):  # detection layer
+    def __init__(
+        self, nc=80, anchors=(), ch=(), imgsz=(640, 640), w=None
+    ):  # detection layer
         super().__init__()
         self.stride = tf.convert_to_tensor(w.stride.numpy(), dtype=tf.float32)
         self.nc = nc  # number of classes
@@ -247,7 +280,8 @@ class TFDetect(keras.layers.Layer):
         self.grid = [tf.zeros(1)] * self.nl  # init grid
         self.anchors = tf.convert_to_tensor(w.anchors.numpy(), dtype=tf.float32)
         self.anchor_grid = tf.reshape(
-            self.anchors * tf.reshape(self.stride, [self.nl, 1, 1]), [self.nl, 1, -1, 1, 2]
+            self.anchors * tf.reshape(self.stride, [self.nl, 1, 1]),
+            [self.nl, 1, -1, 1, 2],
         )
         self.m = [TFConv2d(x, self.no * self.na, 1, w=w.m[i]) for i, x in enumerate(ch)]
         self.training = False  # set to False after building model
@@ -284,7 +318,9 @@ class TFDetect(keras.layers.Layer):
         # yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
         # return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
         xv, yv = tf.meshgrid(tf.range(nx), tf.range(ny))
-        return tf.cast(tf.reshape(tf.stack([xv, yv], 2), [1, 1, ny * nx, 2]), dtype=tf.float32)
+        return tf.cast(
+            tf.reshape(tf.stack([xv, yv], 2), [1, 1, ny * nx, 2]), dtype=tf.float32
+        )
 
 
 class TFUpsample(keras.layers.Layer):
@@ -294,7 +330,9 @@ class TFUpsample(keras.layers.Layer):
     ):  # warning: all arguments needed including 'w'
         super().__init__()
         assert scale_factor == 2, "scale_factor must be 2"
-        self.upsample = lambda x: tf.image.resize(x, (x.shape[1] * 2, x.shape[2] * 2), method=mode)
+        self.upsample = lambda x: tf.image.resize(
+            x, (x.shape[1] * 2, x.shape[2] * 2), method=mode
+        )
         # self.upsample = keras.layers.UpSampling2D(size=scale_factor, interpolation=mode)
         # with default arguments: align_corners=False, half_pixel_centers=False
         # self.upsample = lambda x: tf.raw_ops.ResizeNearestNeighbor(images=x,
@@ -316,13 +354,24 @@ class TFConcat(keras.layers.Layer):
 
 
 def parse_model(d, ch, model, imgsz):  # model_dict, input_channels(3)
-    LOGGER.info(f"\n{'':>3}{'from':>18}{'n':>3}{'params':>10}  {'module':<40}{'arguments':<30}")
-    anchors, nc, gd, gw = d["anchors"], d["nc"], d["depth_multiple"], d["width_multiple"]
-    na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
+    LOGGER.info(
+        f"\n{'':>3}{'from':>18}{'n':>3}{'params':>10}  {'module':<40}{'arguments':<30}"
+    )
+    anchors, nc, gd, gw = (
+        d["anchors"],
+        d["nc"],
+        d["depth_multiple"],
+        d["width_multiple"],
+    )
+    na = (
+        (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors
+    )  # number of anchors
     no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
 
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
+    for i, (f, n, m, args) in enumerate(
+        d["backbone"] + d["head"]
+    ):  # from, number, module, args
         m_str = m
         m = eval(m) if isinstance(m, str) else m  # eval strings
         for j, a in enumerate(args):
@@ -371,11 +420,20 @@ def parse_model(d, ch, model, imgsz):  # model_dict, input_channels(3)
             else tf_m(*args, w=model.model[i])
         )  # module
 
-        torch_m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+        torch_m_ = (
+            nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)
+        )  # module
         t = str(m)[8:-2].replace("__main__.", "")  # module type
         np = sum(x.numel() for x in torch_m_.parameters())  # number params
-        m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
-        LOGGER.info(f"{i:>3}{str(f):>18}{str(n):>3}{np:>10}  {t:<40}{str(args):<30}")  # print
+        m_.i, m_.f, m_.type, m_.np = (
+            i,
+            f,
+            t,
+            np,
+        )  # attach index, 'from' index, type, number params
+        LOGGER.info(
+            f"{i:>3}{str(f):>18}{str(n):>3}{np:>10}  {t:<40}{str(args):<30}"
+        )  # print
         save.extend(
             x % i for x in ([f] if isinstance(f, int) else f) if x != -1
         )  # append to savelist
@@ -422,7 +480,9 @@ class TFModel:
         for i, m in enumerate(self.model.layers):
             if m.f != -1:  # if not from previous layer
                 x = (
-                    y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]
+                    y[m.f]
+                    if isinstance(m.f, int)
+                    else [x if j == -1 else y[j] for j in m.f]
                 )  # from earlier layers
 
             x = m(x)  # run
@@ -435,7 +495,9 @@ class TFModel:
             classes = x[0][:, :, 5:]
             scores = probs * classes
             if agnostic_nms:
-                nms = AgnosticNMS()((boxes, classes, scores), topk_all, iou_thres, conf_thres)
+                nms = AgnosticNMS()(
+                    (boxes, classes, scores), topk_all, iou_thres, conf_thres
+                )
                 return nms, x[1]
             else:
                 boxes = tf.expand_dims(boxes, 2)
@@ -450,7 +512,9 @@ class TFModel:
                 )
                 return nms, x[1]
 
-        return x[0]  # output only first tensor [1,6300,85] = [xywh, conf, class0, class1, ...]
+        return x[
+            0
+        ]  # output only first tensor [1,6300,85] = [xywh, conf, class0, class1, ...]
         # x = x[0][0]  # [x(1,6300,85), ...] to x(6300,85)
         # xywh = x[..., :4]  # x(6300,4) boxes
         # conf = x[..., 4:5]  # x(6300,1) confidences
@@ -531,7 +595,9 @@ def run(
 ):
     # PyTorch model
     im = torch.zeros((batch_size, 3, *imgsz))  # BCHW image
-    model = attempt_load(weights, map_location=torch.device("cpu"), inplace=True, fuse=False)
+    model = attempt_load(
+        weights, map_location=torch.device("cpu"), inplace=True, fuse=False
+    )
     _ = model(im)  # inference
     model.info()
 
@@ -552,7 +618,9 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", type=str, default=ROOT / "yolov5s.pt", help="weights path")
+    parser.add_argument(
+        "--weights", type=str, default=ROOT / "yolov5s.pt", help="weights path"
+    )
     parser.add_argument(
         "--imgsz",
         "--img",

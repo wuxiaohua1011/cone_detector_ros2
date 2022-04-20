@@ -1,4 +1,19 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
+"""
+ Copyright (c) 2022 Ultralytics
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ """
 """
 Image augmentation functions
 """
@@ -9,7 +24,13 @@ import random
 import cv2
 import numpy as np
 
-from utils.general import LOGGER, check_version, colorstr, resample_segments, segment2box
+from utils.general import (
+    LOGGER,
+    check_version,
+    colorstr,
+    resample_segments,
+    segment2box,
+)
 from utils.metrics import bbox_ioa
 
 
@@ -32,7 +53,8 @@ class Albumentations:
                 A.ImageCompression(quality_lower=75, p=0.0),
             ]  # transforms
             self.transform = A.Compose(
-                T, bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"])
+                T,
+                bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"]),
             )
 
             LOGGER.info(
@@ -67,7 +89,9 @@ def augment_hsv(im, hgain=0.5, sgain=0.5, vgain=0.5):
         lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
         lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
 
-        im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
+        im_hsv = cv2.merge(
+            (cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val))
+        )
         cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=im)  # no return needed
 
 
@@ -93,7 +117,9 @@ def replicate(im, labels):
     for i in s.argsort()[: round(s.size * 0.5)]:  # smallest indices
         x1b, y1b, x2b, y2b = boxes[i]
         bh, bw = y2b - y1b, x2b - x1b
-        yc, xc = int(random.uniform(0, h - bh)), int(random.uniform(0, w - bw))  # offset x, y
+        yc, xc = int(random.uniform(0, h - bh)), int(
+            random.uniform(0, w - bw)
+        )  # offset x, y
         x1a, y1a, x2a, y2a = [xc, yc, xc + bw, yc + bh]
         im[y1a:y2a, x1a:x2a] = im[y1b:y2b, x1b:x2b]  # im4[ymin:ymax, xmin:xmax]
         labels = np.append(labels, [[labels[i, 0], x1a, y1a, x2a, y2a]], axis=0)
@@ -186,16 +212,24 @@ def random_perspective(
 
     # Translation
     T = np.eye(3)
-    T[0, 2] = random.uniform(0.5 - translate, 0.5 + translate) * width  # x translation (pixels)
-    T[1, 2] = random.uniform(0.5 - translate, 0.5 + translate) * height  # y translation (pixels)
+    T[0, 2] = (
+        random.uniform(0.5 - translate, 0.5 + translate) * width
+    )  # x translation (pixels)
+    T[1, 2] = (
+        random.uniform(0.5 - translate, 0.5 + translate) * height
+    )  # y translation (pixels)
 
     # Combined rotation matrix
     M = T @ S @ R @ P @ C  # order of operations (right to left) is IMPORTANT
     if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
         if perspective:
-            im = cv2.warpPerspective(im, M, dsize=(width, height), borderValue=(114, 114, 114))
+            im = cv2.warpPerspective(
+                im, M, dsize=(width, height), borderValue=(114, 114, 114)
+            )
         else:  # affine
-            im = cv2.warpAffine(im, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
+            im = cv2.warpAffine(
+                im, M[:2], dsize=(width, height), borderValue=(114, 114, 114)
+            )
 
     # Visualize
     # import matplotlib.pyplot as plt
@@ -234,7 +268,9 @@ def random_perspective(
             # create new boxes
             x = xy[:, [0, 2, 4, 6]]
             y = xy[:, [1, 3, 5, 7]]
-            new = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
+            new = (
+                np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
+            )
 
             # clip
             new[:, [0, 2]] = new[:, [0, 2]].clip(0, width)
@@ -242,7 +278,9 @@ def random_perspective(
 
         # filter candidates
         i = box_candidates(
-            box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.01 if use_segments else 0.10
+            box1=targets[:, 1:5].T * s,
+            box2=new.T,
+            area_thr=0.01 if use_segments else 0.10,
         )
         targets = targets[i]
         targets[:, 1:5] = new[i]
@@ -264,7 +302,11 @@ def copy_paste(im, labels, segments, p=0.5):
                 labels = np.concatenate((labels, [[l[0], *box]]), 0)
                 segments.append(np.concatenate((w - s[:, 0:1], s[:, 1:2]), 1))
                 cv2.drawContours(
-                    im_new, [segments[j].astype(np.int32)], -1, (255, 255, 255), cv2.FILLED
+                    im_new,
+                    [segments[j].astype(np.int32)],
+                    -1,
+                    (255, 255, 255),
+                    cv2.FILLED,
                 )
 
         result = cv2.bitwise_and(src1=im, src2=im_new)
@@ -321,5 +363,8 @@ def box_candidates(
     w2, h2 = box2[2] - box2[0], box2[3] - box2[1]
     ar = np.maximum(w2 / (h2 + eps), h2 / (w2 + eps))  # aspect ratio
     return (
-        (w2 > wh_thr) & (h2 > wh_thr) & (w2 * h2 / (w1 * h1 + eps) > area_thr) & (ar < ar_thr)
+        (w2 > wh_thr)
+        & (h2 > wh_thr)
+        & (w2 * h2 / (w1 * h1 + eps) > area_thr)
+        & (ar < ar_thr)
     )  # candidates

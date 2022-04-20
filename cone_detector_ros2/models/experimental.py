@@ -1,5 +1,19 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
 """
+ Copyright (c) 2022 Ultralytics
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ """ """
 Experimental modules
 """
 import math
@@ -33,7 +47,9 @@ class Sum(nn.Module):
         self.weight = weight  # apply weights boolean
         self.iter = range(n - 1)  # iter object
         if weight:
-            self.w = nn.Parameter(-torch.arange(1.0, n) / 2, requires_grad=True)  # layer weights
+            self.w = nn.Parameter(
+                -torch.arange(1.0, n) / 2, requires_grad=True
+            )  # layer weights
 
     def forward(self, x):
         y = x[0]  # no weight
@@ -69,7 +85,9 @@ class MixConv2d(nn.Module):
 
         self.m = nn.ModuleList(
             [
-                nn.Conv2d(c1, int(c_), k, s, k // 2, groups=math.gcd(c1, int(c_)), bias=False)
+                nn.Conv2d(
+                    c1, int(c_), k, s, k // 2, groups=math.gcd(c1, int(c_)), bias=False
+                )
                 for k, c_ in zip(k, c_)
             ]
         )
@@ -113,7 +131,9 @@ def attempt_load(weights, map_location=None, inplace=True, fuse=True):
         if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, Model):
             m.inplace = inplace  # torch 1.7.0 compatibility
             if t is Detect:
-                if not isinstance(m.anchor_grid, list):  # new Detect Layer compatibility
+                if not isinstance(
+                    m.anchor_grid, list
+                ):  # new Detect Layer compatibility
                     delattr(m, "anchor_grid")
                     setattr(m, "anchor_grid", [torch.zeros(1)] * m.nl)
         elif t is Conv:
