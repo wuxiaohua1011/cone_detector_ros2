@@ -1,10 +1,8 @@
 import numpy as np
-from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Transform
 from geometry_msgs.msg import TransformStamped
-from geometry_msgs.msg import Vector3
 import tf_transformations as tr
 from matplotlib import cm
 from .augmentations import letterbox
@@ -16,9 +14,7 @@ VID_RANGE = np.linspace(0.0, 1.0, VIRIDIS.shape[0])
 
 def convert_image(img0, img_size=640, stride=32, auto=True):
     # Padded resize
-    img = letterbox(
-        img0, img_size, stride=stride, auto=True, scaleFill=False, scaleup=True
-    )[0]
+    img = letterbox(img0, img_size, stride=stride, auto=True, scaleFill=False, scaleup=True)[0]
 
     # Convert
     img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -27,9 +23,7 @@ def convert_image(img0, img_size=640, stride=32, auto=True):
 
 
 def get_points_only_in_bbox(boxes, points, im):
-    filtered_points = [
-        get_points_only_in_bbox_helper(box, points=points, im=im) for box in boxes
-    ]
+    filtered_points = [get_points_only_in_bbox_helper(box, points=points, im=im) for box in boxes]
     filtered_points = [
         p for p in filtered_points if np.shape(p) != () and np.shape(p)[0] > 0
     ]  # get points that have values, not empty slices
@@ -89,9 +83,7 @@ def pose_to_pq(msg):
       - q: quaternion as a numpy array (order = [x,y,z,w])
     """
     p = np.array([msg.position.x, msg.position.y, msg.position.z])
-    q = np.array(
-        [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
-    )
+    q = np.array([msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w])
     return p, q
 
 

@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
-from distutils.log import debug
-from lib2to3.pytree import convert
 from builtin_interfaces.msg import Duration as BuiltInDuration
-from numpy import imag
 from std_msgs.msg import Header
 import rclpy
 import rclpy.node
-import sys
 import cv2
 import numpy as np
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import rclpy
 import rclpy.node
-import sys
 import cv2
 import numpy as np
 from sensor_msgs.msg import Image
@@ -24,41 +19,26 @@ import numpy as np
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
 from tf2_ros import TransformException
-import tf_transformations as tr
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
-from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Transform
-from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Vector3
 import numpy as np
 from vision_msgs.msg import Detection3DArray, Detection3D, BoundingBox3D
-from visualization_msgs.msg import MarkerArray, Marker
+from visualization_msgs.msg import Marker
 from std_msgs.msg import ColorRGBA
 from image_geometry import PinholeCameraModel
 
 from rclpy.qos import *
 from .models.common import DetectMultiBackend
 from .utils.general import (
-    LOGGER,
-    check_file,
     check_img_size,
-    check_imshow,
-    check_requirements,
-    colorstr,
     cv2,
-    increment_path,
     non_max_suppression,
-    print_args,
     scale_coords,
-    strip_optimizer,
-    xyxy2xywh,
 )
 from .utils.torch_utils import select_device
 import torch
-import torch.backends.cudnn as cudnn
-from .utils.plots import Annotator, colors, save_one_box
-from .utils.augmentations import letterbox
+from .utils.plots import Annotator, colors
 from .utils.cone_detector_util import *
 
 
@@ -86,9 +66,7 @@ class ConeDetectorNode(rclpy.node.Node):
             f"Listening to RGB Camera topic: {self.get_parameter('rgb_camera_topic').get_parameter_value().string_value}"
         )
 
-        self.to_frame_rel = (
-            self.get_parameter("rgb_frame_id").get_parameter_value().string_value
-        )
+        self.to_frame_rel = self.get_parameter("rgb_frame_id").get_parameter_value().string_value
         self.from_frame_rel = (
             self.get_parameter("lidar_frame_id").get_parameter_value().string_value
         )
@@ -96,9 +74,7 @@ class ConeDetectorNode(rclpy.node.Node):
             self.get_parameter("output_frame_id").get_parameter_value().string_value
         )
         if self.output_frame_id == "":
-            self.get_logger().info(
-                f"No output frame specified, defaulting to {self.to_frame_rel}"
-            )
+            self.get_logger().info(f"No output frame specified, defaulting to {self.to_frame_rel}")
             # only output in sensor's point of view if no global point of view given
             self.output_frame_id = self.to_frame_rel
         self.get_logger().info(
@@ -109,8 +85,7 @@ class ConeDetectorNode(rclpy.node.Node):
         )
         self.is_carla = (
             True
-            if "carla"
-            in self.get_parameter("rgb_camera_topic").get_parameter_value().string_value
+            if "carla" in self.get_parameter("rgb_camera_topic").get_parameter_value().string_value
             else False
         )
         self.get_logger().info(f"Is Carla? {self.is_carla}")
@@ -148,9 +123,7 @@ class ConeDetectorNode(rclpy.node.Node):
 
         self.subscription = self.create_subscription(
             CameraInfo,
-            self.get_parameter("rgb_camera_info_topic")
-            .get_parameter_value()
-            .string_value,
+            self.get_parameter("rgb_camera_info_topic").get_parameter_value().string_value,
             self.camera_info_callback,
             10,
         )
@@ -174,9 +147,7 @@ class ConeDetectorNode(rclpy.node.Node):
         self.image_h = 386
 
         self.device = select_device(device="")
-        self.weights_path = (
-            self.get_parameter("model_path").get_parameter_value().string_value
-        )
+        self.weights_path = self.get_parameter("model_path").get_parameter_value().string_value
         self.model = DetectMultiBackend(weights=self.weights_path, device=self.device)
         self.stride, self.names, self.pt = (
             self.model.stride,
@@ -192,13 +163,9 @@ class ConeDetectorNode(rclpy.node.Node):
 
     def callback(self, left_cam_msg, center_lidar_pcl_msg):
         if not self.has_received_intrinsics:
-            self.get_logger().info(
-                "Received Images, but not camera intrinsics, waiting..."
-            )
+            self.get_logger().info("Received Images, but not camera intrinsics, waiting...")
             return
-        original_image = self.bridge.imgmsg_to_cv2(
-            left_cam_msg, desired_encoding="bgr8"
-        )
+        original_image = self.bridge.imgmsg_to_cv2(left_cam_msg, desired_encoding="bgr8")
 
         boxes = self.process_image(im=original_image)
         if len(boxes) == 0 and self.debug:
@@ -213,9 +180,7 @@ class ConeDetectorNode(rclpy.node.Node):
             return
 
         # filter points that are in the bounding box
-        filtered_points = get_points_only_in_bbox(
-            boxes=boxes, points=points_2d, im=original_image
-        )
+        filtered_points = get_points_only_in_bbox(boxes=boxes, points=points_2d, im=original_image)
         # change back to camera coordinate
         output = self.img_to_cam(points=filtered_points)
         if len(output) == 0:
@@ -276,9 +241,7 @@ class ConeDetectorNode(rclpy.node.Node):
                     c = int(cls)  # integer class
                     label = None
                     annotator.box_label(xyxy, label, color=colors(c, True))
-                    minx, miny, maxx, maxy = [
-                        int(t.cpu().detach().numpy()) for t in xyxy
-                    ]
+                    minx, miny, maxx, maxy = [int(t.cpu().detach().numpy()) for t in xyxy]
                     # padding = int((maxy - miny) * 0.8)
                     result_boxes.append(
                         [minx, miny, maxx, maxy]
@@ -339,15 +302,11 @@ class ConeDetectorNode(rclpy.node.Node):
 
         # Add an extra 1.0 at the end of each 3d point so it becomes of
         # shape (4, p_cloud_size) and it can be multiplied by a (4, 4) matrix.
-        local_lidar_points = np.r_[
-            local_lidar_points, [np.ones(local_lidar_points.shape[1])]
-        ]
+        local_lidar_points = np.r_[local_lidar_points, [np.ones(local_lidar_points.shape[1])]]
 
         # now we tranform the points from lidar to camera
         sensor_points = np.dot(lidar2cam, local_lidar_points)
-        point_in_camera_coords = np.array(
-            [sensor_points[0], sensor_points[1], sensor_points[2]]
-        )
+        point_in_camera_coords = np.array([sensor_points[0], sensor_points[1], sensor_points[2]])
         # and remember that in standard image coordinate, we have x as side ways, y as up and down, z as depth
         # so we need to convert to that format.
         if self.is_carla is False:
@@ -444,9 +403,7 @@ class ConeDetectorNode(rclpy.node.Node):
                 )  # 3xn
                 cam_points = np.dot(np.linalg.inv(self.intrinsics), points_2d)  # 3xn
                 if self.is_carla is False:
-                    cam_points = np.array(
-                        [cam_points[2], -cam_points[0], -cam_points[1]]
-                    )
+                    cam_points = np.array([cam_points[2], -cam_points[0], -cam_points[1]])
                 output.append(cam_points)  # mx3xn, where m is number of detections
             return output
         except np.linalg.LinAlgError:
@@ -506,9 +463,7 @@ class ConeDetectorNode(rclpy.node.Node):
         for center in centers:
             bbox = BoundingBox3D()
             bbox.center = Pose(
-                position=Point(
-                    x=float(center[0]), y=float(center[1]), z=float(center[2])
-                )
+                position=Point(x=float(center[0]), y=float(center[1]), z=float(center[2]))
             )
             bbox.size = Vector3(x=float(1), y=float(1), z=float(1))
             detection3d = Detection3D(header=header, bbox=bbox)
