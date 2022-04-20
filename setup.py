@@ -28,7 +28,7 @@ setup(
         "console_scripts": [
             "video_player_node = cone_detector_ros2.video_player_node:main",
             "cone_detector_node = cone_detector_ros2.cone_detector_node:main",
-            "test_node = cone_detector_ros2.test_node:main",
+            # "test_node = cone_detector_ros2.test_node:main",
         ],
     },
 )
