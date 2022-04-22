@@ -116,7 +116,7 @@ class ConeDetectorNode(rclpy.node.Node):
 
         profile = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
-            reliability=QoSReliabilityPolicy.RELIABLE,
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
             depth=5,
         )
@@ -149,7 +149,7 @@ class ConeDetectorNode(rclpy.node.Node):
             .get_parameter_value()
             .string_value,
             self.camera_info_callback,
-            10,
+            qos_profile=profile,
         )
         self.subscription  # prevent unused variable warning
         self.tf_buffer = Buffer()
@@ -196,7 +196,8 @@ class ConeDetectorNode(rclpy.node.Node):
         original_image = self.bridge.imgmsg_to_cv2(
             left_cam_msg, desired_encoding="bgr8"
         )
-
+        cv2.imshow("original_image", original_image)
+        cv2.waitKey(1)
         boxes = self.process_image(im=original_image)
         if len(boxes) == 0 and self.debug:
             self.get_logger().info("No Traffic Cone detected")

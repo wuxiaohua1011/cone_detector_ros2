@@ -15,12 +15,12 @@ def generate_launch_description():
                     )
                 ),
                 launch_arguments={
-                    "rgb_camera_topic": "/zed2i/zed_node/left/image_rect_color",
-                    "rgb_camera_info_topic": "/zed2i/zed_node/left/camera_info",
-                    "lidar_frame_id": "lidar_link",
-                    "rgb_frame_id": "camera_link",
-                    "output_frame_id": "camera_link",
-                    "lidar_topic": "/livox/lidar",
+                    "rgb_camera_topic": "/zed2_front_left/left/image_rect_color",
+                    "rgb_camera_info_topic": "/zed2_front_left/left/camera_info",
+                    "lidar_frame_id": "livox_front_left",
+                    "rgb_frame_id": "zed2_front_left_base_link",
+                    "output_frame_id": "zed2_front_left_base_link",
+                    "lidar_topic": "/livox/lidar_3WEDH7600104181",
                     "debug": "True",
                 }.items(),
             )
