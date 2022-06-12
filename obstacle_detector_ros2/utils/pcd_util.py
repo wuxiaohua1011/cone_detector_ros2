@@ -2,9 +2,7 @@
 # https://github.com/ros/common_msgs/tree/noetic-devel/sensor_msgs/src/sensor_msgs
 # I'll make an official port and PR to this repo later:
 # https://github.com/ros2/common_interfaces
-import sys
-import math
-import struct
+
 from sensor_msgs.msg import PointCloud2, PointField
 
 __docformat__ = "restructuredtext en"
@@ -158,12 +156,13 @@ def pointcloud2_to_array(cloud_msg, squeeze=True):
     The reason for using np.frombuffer rather than struct.unpack is
     speed... especially for large point clouds, this will be <much> faster.
     """
+    import numpy.lib.recfunctions as rf
+
     # construct a numpy record type equivalent to the point type of this cloud
     dtype_list = fields_to_dtype(cloud_msg.fields, cloud_msg.point_step)
 
     # parse the cloud into an array
     cloud_arr = np.frombuffer(cloud_msg.data, dtype_list)
-
     # remove the dummy fields that were added
     cloud_arr = cloud_arr[
         [
@@ -172,16 +171,16 @@ def pointcloud2_to_array(cloud_msg, squeeze=True):
             if not (fname[: len(DUMMY_FIELD_PREFIX)] == DUMMY_FIELD_PREFIX)
         ]
     ]
-
-    if squeeze and cloud_msg.height == 1:
-        return np.reshape(cloud_arr, (cloud_msg.width,))
-    else:
-        return np.reshape(cloud_arr, (cloud_msg.height, cloud_msg.width))
+    cloud_arr = rf.structured_to_unstructured(cloud_arr)
+    return cloud_arr
 
 
 @converts_from_numpy(PointCloud2)
-def array_to_pointcloud2(cloud_arr, stamp=None, frame_id=None):
+def array_to_pointcloud2(cloud_arr, stamp=None, frame_id=None, merge_rgb=False):
     """Converts a numpy record array to a sensor_msgs.msg.PointCloud2."""
+    if merge_rgb:
+        cloud_arr = merge_rgb_fields(cloud_arr)
+
     # make it 2d (even if height will be 1)
     cloud_arr = np.atleast_2d(cloud_arr)
 
@@ -193,28 +192,14 @@ def array_to_pointcloud2(cloud_arr, stamp=None, frame_id=None):
         cloud_msg.header.frame_id = frame_id
     cloud_msg.height = cloud_arr.shape[0]
     cloud_msg.width = cloud_arr.shape[1]
-    cloud_msg.fields = dtype_to_fields(cloud_arr.dtype)
+    cloud_msg.fields = arr_to_fields(cloud_arr)
     cloud_msg.is_bigendian = False  # assumption
     cloud_msg.point_step = cloud_arr.dtype.itemsize
     cloud_msg.row_step = cloud_msg.point_step * cloud_arr.shape[1]
     cloud_msg.is_dense = all(
         [np.isfinite(cloud_arr[fname]).all() for fname in cloud_arr.dtype.names]
     )
-
-    # The PointCloud2.data setter will create an array.array object for you if you don't
-    # provide it one directly. This causes very slow performance because it iterates
-    # over each byte in python.
-    # Here we create an array.array object using a memoryview, limiting copying and
-    # increasing performance.
-    memory_view = memoryview(cloud_arr)
-    if memory_view.nbytes > 0:
-        array_bytes = memory_view.cast("B")
-    else:
-        # Casting raises a TypeError if the array has no elements
-        array_bytes = b""
-    as_array = array.array("B")
-    as_array.frombytes(array_bytes)
-    cloud_msg.data = as_array
+    cloud_msg.data = cloud_arr.tostring()
     return cloud_msg
 
 
@@ -315,99 +300,111 @@ def pointcloud2_to_xyz_array(cloud_msg, remove_nans=True):
     return get_xyz_points(pointcloud2_to_array(cloud_msg), remove_nans=remove_nans)
 
 
-_DATATYPES = {}
-_DATATYPES[PointField.INT8] = ("b", 1)
-_DATATYPES[PointField.UINT8] = ("B", 1)
-_DATATYPES[PointField.INT16] = ("h", 2)
-_DATATYPES[PointField.UINT16] = ("H", 2)
-_DATATYPES[PointField.INT32] = ("i", 4)
-_DATATYPES[PointField.UINT32] = ("I", 4)
-_DATATYPES[PointField.FLOAT32] = ("f", 4)
-_DATATYPES[PointField.FLOAT64] = ("d", 8)
-
-
-def read_points(cloud, field_names=None, skip_nans=False, uvs=[]):
+def array_to_xyz_pointcloud2f(cloud_arr, stamp=None, frame_id=None, merge_rgb=False):
+    """convert an Nx3 float array to an xyz point cloud.
+    beware of numerical issues when casting from other types to float32.
     """
-    Read points from a L{sensor_msgs.PointCloud2} message.
-    @param cloud: The point cloud to read from.
-    @type  cloud: L{sensor_msgs.PointCloud2}
-    @param field_names: The names of fields to read. If None, read all fields. [default: None]
-    @type  field_names: iterable
-    @param skip_nans: If True, then don't return any point with a NaN value.
-    @type  skip_nans: bool [default: False]
-    @param uvs: If specified, then only return the points at the given coordinates. [default: empty list]
-    @type  uvs: iterable
-    @return: Generator which yields a list of values for each point.
-    @rtype:  generator
-    """
-    assert isinstance(cloud, PointCloud2), "cloud is not a sensor_msgs.msg.PointCloud2"
-    fmt = _get_struct_fmt(cloud.is_bigendian, cloud.fields, field_names)
-    width, height, point_step, row_step, data, isnan = (
-        cloud.width,
-        cloud.height,
-        cloud.point_step,
-        cloud.row_step,
-        cloud.data,
-        math.isnan,
+    cloud_arr = np.asarray(cloud_arr, dtype=np.float32)
+    if not cloud_arr.ndim == 2:
+        raise ValueError("cloud_arr must be 2D array")
+    if not cloud_arr.shape[1] == 3:
+        raise ValueError("cloud_arr shape must be Nx3")
+    xyz = cloud_arr.view(
+        np.dtype([("x", np.float32), ("y", np.float32), ("z", np.float32)])
+    ).squeeze()
+    return array_to_pointcloud2(
+        xyz, stamp=stamp, frame_id=frame_id, merge_rgb=merge_rgb
     )
-    unpack_from = struct.Struct(fmt).unpack_from
-
-    if skip_nans:
-        if uvs:
-            for u, v in uvs:
-                p = unpack_from(data, (row_step * v) + (point_step * u))
-                has_nan = False
-                for pv in p:
-                    if isnan(pv):
-                        has_nan = True
-                        break
-                if not has_nan:
-                    yield p
-        else:
-            for v in range(height):
-                offset = row_step * v
-                for u in range(width):
-                    p = unpack_from(data, offset)
-                    has_nan = False
-                    for pv in p:
-                        if isnan(pv):
-                            has_nan = True
-                            break
-                    if not has_nan:
-                        yield p
-                    offset += point_step
-    else:
-        if uvs:
-            for u, v in uvs:
-                yield unpack_from(data, (row_step * v) + (point_step * u))
-        else:
-            for v in range(height):
-                offset = row_step * v
-                for u in range(width):
-                    yield unpack_from(data, offset)
-                    offset += point_step
 
 
-def _get_struct_fmt(is_bigendian, fields, field_names=None):
-    fmt = ">" if is_bigendian else "<"
+def array_to_xyzi_pointcloud2f(cloud_arr, stamp=None, frame_id=None, merge_rgb=False):
+    """convert an Nx4 float array to an xyzi point cloud.
+    beware of numerical issues when casting from other types to float32.
+    """
+    cloud_arr = np.asarray(cloud_arr, dtype=np.float32)
+    if not cloud_arr.ndim == 2:
+        raise ValueError("cloud_arr must be 2D array")
+    if not cloud_arr.shape[1] == 4:
+        raise ValueError("cloud_arr shape must be Nx4")
+    xyzi = cloud_arr.view(
+        np.dtype(
+            [
+                ("x", np.float32),
+                ("y", np.float32),
+                ("z", np.float32),
+                ("intensity", np.float32),
+            ]
+        )
+    ).squeeze()
+    return array_to_pointcloud2(
+        xyzi, stamp=stamp, frame_id=frame_id, merge_rgb=merge_rgb
+    )
 
-    offset = 0
-    for field in (
-        f
-        for f in sorted(fields, key=lambda f: f.offset)
-        if field_names is None or f.name in field_names
-    ):
-        if offset < field.offset:
-            fmt += "x" * (field.offset - offset)
-            offset = field.offset
-        if field.datatype not in _DATATYPES:
-            print(
-                "Skipping unknown PointField datatype [%d]" % field.datatype,
-                file=sys.stderr,
-            )
-        else:
-            datatype_fmt, datatype_length = _DATATYPES[field.datatype]
-            fmt += field.count * datatype_fmt
-            offset += field.count * datatype_length
 
-    return fmt
+def arrays_to_xyzi_pointcloud2f(
+    cloud_arr, intensity_array, stamp=None, frame_id=None, merge_rgb=False
+):
+    """convert an Nx3 float array and N array to an xyzi point cloud.
+    beware of numerical issues when casting from other types to float32.
+    """
+    cloud_arr = np.asarray(cloud_arr, dtype=np.float32)
+    if not cloud_arr.ndim == 2:
+        raise ValueError("cloud_arr must be 2D array")
+    if not cloud_arr.shape[1] == 3:
+        raise ValueError("cloud_arr shape must be Nx3")
+    if not intensity_array.size == cloud_arr.shape[0]:
+        raise ValueError("wrong intensity shape")
+    xyzi = np.zeros((len(cloud_arr), 4), dtype=np.float32)
+    xyzi[:, 0:3] = cloud_arr
+    xyzi[:, 3] = intensity_array
+    xyzi = xyzi.view(
+        np.dtype(
+            [
+                ("x", np.float32),
+                ("y", np.float32),
+                ("z", np.float32),
+                ("intensity", np.float32),
+            ]
+        )
+    ).squeeze()
+    return array_to_pointcloud2(
+        xyzi, stamp=stamp, frame_id=frame_id, merge_rgb=merge_rgb
+    )
+
+
+def array_to_xyzl_pointcloud2f(cloud_arr, stamp=None, frame_id=None, merge_rgb=False):
+    """convert an Nx4 float array to an xyzi point cloud.
+    beware of numerical issues when casting from other types to float32.
+    """
+    cloud_arr = np.asarray(cloud_arr, dtype=np.float32)
+    if not cloud_arr.ndim == 2:
+        raise ValueError("cloud_arr must be 2D array")
+    if not cloud_arr.shape[1] == 4:
+        raise ValueError("cloud_arr shape must be Nx3")
+    xyzi = cloud_arr.view(
+        np.dtype(
+            [
+                ("x", np.float32),
+                ("y", np.float32),
+                ("z", np.float32),
+                ("intensity", np.float32),
+            ]
+        )
+    ).squeeze()
+    return array_to_pointcloud2(
+        xyzi, stamp=stamp, frame_id=frame_id, merge_rgb=merge_rgb
+    )
+
+
+def arr_to_fields(cloud_arr):
+    """Convert a numpy record datatype into a list of PointFields."""
+    fields = []
+    for field_name in cloud_arr.dtype.names:
+        np_field_type, field_offset = cloud_arr.dtype.fields[field_name]
+        pf = PointField()
+        pf.name = field_name
+        pf.datatype = nptype_to_pftype[np_field_type]
+        pf.offset = field_offset
+        pf.count = 1  # is this ever more than one?
+        fields.append(pf)
+    return fields

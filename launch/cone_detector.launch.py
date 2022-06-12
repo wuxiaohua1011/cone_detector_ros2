@@ -12,11 +12,11 @@ import launch
 
 
 def generate_launch_description():
-    base_path = os.path.realpath(get_package_share_directory("cone_detector_ros2"))
+    base_path = os.path.realpath(get_package_share_directory("obstacle_detector_ros2"))
     model_path = (Path(base_path) / "configs" / "best.pt").as_posix()
 
     pointcloud_to_depth_img_node = Node(
-        package="cone_detector_ros2",
+        package="obstacle_detector_ros2",
         executable="pointcloud_to_depth_img_node",
         name="pointcloud_to_depth_img_node",
         output="screen",
@@ -42,7 +42,7 @@ def generate_launch_description():
         ],
     )
     cones_extractor_node = Node(
-        package="cone_detector_ros2",
+        package="obstacle_detector_ros2",
         executable="cones_extractor_node",
         name="cones_extractor_node",
         output="screen",
@@ -65,7 +65,7 @@ def generate_launch_description():
         ],
     )
     rgb_cone_detector_node = Node(
-        package="cone_detector_ros2",
+        package="obstacle_detector_ros2",
         executable="rgb_cone_detector_node",
         name="rgb_cone_detector_node",
         output="screen",

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 from glob import glob
 
-package_name = "cone_detector_ros2"
+package_name = "obstacle_detector_ros2"
 
 setup(
     name=package_name,
@@ -29,12 +29,13 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "rgb_cone_detector_node = cone_detector_ros2.rgb_cone_detector_node:main",
-            "pointcloud_to_depth_img_node = cone_detector_ros2.pointcloud_to_depth_img_node:main",
-            "cones_extractor_node = cone_detector_ros2.cones_extractor_node:main",
-            "data_recorder_node=cone_detector_ros2.data_recorder_node:main",
-            "object_distance_estimator_node=cone_detector_ros2.object_distance_estimator_node:main",
-            "dummy_3d_publisher_node=cone_detector_ros2.dummy_3d_publisher_node:main"
+            "rgb_cone_detector_node = obstacle_detector_ros2.rgb_cone_detector_node:main",
+            "pointcloud_to_depth_img_node = obstacle_detector_ros2.pointcloud_to_depth_img_node:main",
+            "cones_extractor_node = obstacle_detector_ros2.cones_extractor_node:main",
+            "data_recorder_node=obstacle_detector_ros2.data_recorder_node:main",
+            "object_distance_estimator_node=obstacle_detector_ros2.object_distance_estimator_node:main",
+            "dummy_3d_publisher_node=obstacle_detector_ros2.dummy_3d_publisher_node:main",
+            "euclidean_clustering_node=obstacle_detector_ros2.euclidean_clustering_node:main",
         ],
     },
 )
