@@ -1,0 +1,5 @@
+*__pycache__*
+cone_detector_ros2/utils/__pycache__/
+cone_detector_ros2/models/__pycache__/
+**/__pycache__/
+*.pt

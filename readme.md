@@ -1,0 +1,1 @@
+Please download the `pt` file from [here](https://drive.google.com/file/d/14anYvGKaXo7BToPP3v5xAEQRqSEksgWj/view?usp=sharing) and put it in the `configs` folder
