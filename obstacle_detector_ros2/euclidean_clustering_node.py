@@ -71,6 +71,9 @@ class EuclideanClusteringNode(rclpy.node.Node):
 
     def callback(self, msg: PointCloud2):
         points = pointcloud2_to_array(msg)
+        if len(points) == 0:
+            # if there's no points
+            return
         labels = self.cluster(points=points)
 
         self.publish(

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 from distutils.log import debug
 from lib2to3.pytree import convert
-
-from tomlkit import datetime
 from builtin_interfaces.msg import Duration as BuiltInDuration
 from numpy import imag
 from std_msgs.msg import Header
@@ -43,7 +41,10 @@ class DataRecorderNode(rclpy.node.Node):
         if Path(self.output_dir).exists() == False:
             Path(self.output_dir).mkdir(exist_ok=True, parents=True)
         self.img_sub = self.create_subscription(
-            Image, self.rgb_camera_topic, self.img_callback, qos_profile=rclpy.qos.qos_profile_sensor_data
+            Image,
+            self.rgb_camera_topic,
+            self.img_callback,
+            qos_profile=rclpy.qos.qos_profile_sensor_data,
         )
         self.bridge = CvBridge()
         self.num_images_recorded = 0
